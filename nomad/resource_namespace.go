@@ -1,25 +1,26 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceNamespace() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceNamespaceWrite,
-		Update: resourceNamespaceWrite,
-		Delete: resourceNamespaceDelete,
-		Read:   resourceNamespaceRead,
-		Exists: resourceNamespaceExists,
+		CreateContext: resourceNamespaceWrite,
+		UpdateContext: resourceNamespaceWrite,
+		DeleteContext: resourceNamespaceDelete,
+		ReadContext:   resourceNamespaceRead,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -45,7 +46,7 @@ func resourceNamespace() *schema.Resource {
 	}
 }
 
-func resourceNamespaceWrite(d *schema.ResourceData, meta interface{}) error {
+func resourceNamespaceWrite(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 
 	namespace := api.Namespace{
@@ -57,43 +58,51 @@ func resourceNamespaceWrite(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG] Upserting namespace %q", namespace.Name)
 	_, err := client.Namespaces().Register(&namespace, nil)
 	if err != nil {
-		return fmt.Errorf("error inserting namespace %q: %s", namespace.Name, err.Error())
+		return diag.Errorf("error inserting namespace %q: %s", namespace.Name, err)
 	}
 	log.Printf("[DEBUG] Created namespace %q", namespace.Name)
 	d.SetId(namespace.Name)
 
-	return resourceNamespaceRead(d, meta)
+	return resourceNamespaceRead(ctx, d, meta)
 }
 
-func resourceNamespaceDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceNamespaceDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
 	log.Printf("[DEBUG] Deleting namespace %q", name)
 	retries := 0
 	for {
-		var err error
+		var err diag.Diagnostics
 		if name == api.DefaultNamespace {
 			log.Printf("[DEBUG] Can't delete default namespace, clearing attributes instead")
 			d.Set("description", "Default shared namespace")
 			d.Set("quota", "")
-			err = resourceNamespaceWrite(d, meta)
+			err = resourceNamespaceWrite(ctx, d, meta)
 		} else {
-			_, err = client.Namespaces().Delete(name, nil)
+			if _, er := client.Namespaces().Delete(name, nil); er != nil {
+				err = diag.FromErr(er)
+			}
 		}
 
-		if err == nil {
+		if len(err) == 0 {
 			break
 		} else if retries < 10 {
-			if strings.Contains(err.Error(), "has non-terminal jobs") {
+			if strings.Contains(err[0].Summary, "has non-terminal jobs") {
 				log.Printf("[WARN] could not delete namespace %q because of non-terminal jobs, will pause and retry", name)
 				time.Sleep(5 * time.Second)
 				retries++
 				continue
 			}
-			return fmt.Errorf("error deleting namespace %q: %s", name, err.Error())
+			return append(err, diag.Diagnostic{
+				Severity: diag.Error,
+				Summary:  fmt.Sprintf("error deleting namespace %q.", name),
+			})
 		} else {
-			return fmt.Errorf("too many failures attempting to delete namespace %q: %s", name, err.Error())
+			return append(err, diag.Diagnostic{
+				Severity: diag.Error,
+				Summary:  fmt.Sprintf("too many failures attempting to delete namespace %q", name),
+			})
 		}
 	}
 
@@ -106,7 +115,7 @@ func resourceNamespaceDelete(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceNamespaceRead(d *schema.ResourceData, meta interface{}) error {
+func resourceNamespaceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
@@ -114,7 +123,7 @@ func resourceNamespaceRead(d *schema.ResourceData, meta interface{}) error {
 	namespace, _, err := client.Namespaces().Info(name, nil)
 	if err != nil {
 		// we have Exists, so no need to handle 404
-		return fmt.Errorf("error reading namespace %q: %s", name, err.Error())
+		return diag.Errorf("error reading namespace %q: %s", name, err)
 	}
 	log.Printf("[DEBUG] Read namespace %q", name)
 
@@ -123,30 +132,4 @@ func resourceNamespaceRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("quota", namespace.Quota)
 
 	return nil
-}
-
-func resourceNamespaceExists(d *schema.ResourceData, meta interface{}) (bool, error) {
-	client := meta.(ProviderConfig).client
-
-	name := d.Id()
-	log.Printf("[DEBUG] Checking if namespace %q exists", name)
-	resp, _, err := client.Namespaces().Info(name, nil)
-	if err != nil {
-		// As of Nomad 0.4.1, the API client returns an error for 404
-		// rather than a nil result, so we must check this way.
-		// there's an open issue to resolve this situation:
-		// https://github.com/hashicorp/nomad/issues/1849
-		if strings.Contains(err.Error(), "404") {
-			return false, nil
-		}
-
-		return true, fmt.Errorf("error checking for namespace %q: %#v", name, err)
-	}
-	if resp == nil {
-		// just to be sure
-		log.Printf("[DEBUG] Response was nil, namespace %q doesn't exist", name)
-		return false, nil
-	}
-
-	return true, nil
 }

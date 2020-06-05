@@ -1,24 +1,23 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
-	"strings"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceACLToken() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceACLTokenCreate,
-		Update: resourceACLTokenUpdate,
-		Delete: resourceACLTokenDelete,
-		Read:   resourceACLTokenRead,
-		Exists: resourceACLTokenExists,
+		CreateContext: resourceACLTokenCreate,
+		UpdateContext: resourceACLTokenUpdate,
+		DeleteContext: resourceACLTokenDelete,
+		ReadContext:   resourceACLTokenRead,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -71,7 +70,7 @@ func resourceACLToken() *schema.Resource {
 	}
 }
 
-func resourceACLTokenCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceACLTokenCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -91,7 +90,7 @@ func resourceACLTokenCreate(d *schema.ResourceData, meta interface{}) error {
 	log.Println("[DEBUG] Creating ACL token")
 	resp, _, err := client.ACLTokens().Create(&token, nil)
 	if err != nil {
-		return fmt.Errorf("error creating ACL token: %s", err.Error())
+		return diag.Errorf("error creating ACL token: %s", err)
 	}
 	log.Printf("[DEBUG] Created ACL token %q", resp.AccessorID)
 	d.SetId(resp.AccessorID)
@@ -104,10 +103,10 @@ func resourceACLTokenCreate(d *schema.ResourceData, meta interface{}) error {
 	d.Set("global", resp.Global)
 	d.Set("create_time", resp.CreateTime.UTC().String())
 
-	return resourceACLTokenRead(d, meta)
+	return resourceACLTokenRead(ctx, d, meta)
 }
 
-func resourceACLTokenUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceACLTokenUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -127,14 +126,14 @@ func resourceACLTokenUpdate(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG] Updating ACL token %q", d.Id())
 	_, _, err := client.ACLTokens().Update(&token, nil)
 	if err != nil {
-		return fmt.Errorf("error updating ACL token %q: %s", d.Id(), err.Error())
+		return diag.Errorf("error updating ACL token %q. %s", d.Id(), err)
 	}
 	log.Printf("[DEBUG] Updated ACL token %q", d.Id())
 
-	return resourceACLTokenRead(d, meta)
+	return resourceACLTokenRead(ctx, d, meta)
 }
 
-func resourceACLTokenDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceACLTokenDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 	accessor := d.Id()
@@ -143,14 +142,14 @@ func resourceACLTokenDelete(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG] Deleting ACL token %q", accessor)
 	_, err := client.ACLTokens().Delete(accessor, nil)
 	if err != nil {
-		return fmt.Errorf("error deleting ACL token %q: %s", accessor, err.Error())
+		return diag.Errorf("error deleting ACL token %q: %s", accessor, err)
 	}
 	log.Printf("[DEBUG] Deleted ACL token %q", accessor)
 
 	return nil
 }
 
-func resourceACLTokenRead(d *schema.ResourceData, meta interface{}) error {
+func resourceACLTokenRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 	accessor := d.Id()
@@ -160,7 +159,7 @@ func resourceACLTokenRead(d *schema.ResourceData, meta interface{}) error {
 	token, _, err := client.ACLTokens().Info(accessor, nil)
 	if err != nil {
 		// we have Exists, so no need to handle 404
-		return fmt.Errorf("error reading ACL token %q: %s", accessor, err.Error())
+		return diag.Errorf("error reading ACL token %q: %s", accessor, err)
 	}
 	log.Printf("[DEBUG] Read ACL token %q", accessor)
 
@@ -173,24 +172,4 @@ func resourceACLTokenRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("create_time", token.CreateTime.UTC().String())
 
 	return nil
-}
-
-func resourceACLTokenExists(d *schema.ResourceData, meta interface{}) (bool, error) {
-	providerConfig := meta.(ProviderConfig)
-	client := providerConfig.client
-
-	accessor := d.Id()
-	log.Printf("[DEBUG] Checking if ACL token %q exists", accessor)
-	_, _, err := client.ACLTokens().Info(accessor, nil)
-	if err != nil {
-		// As of Nomad 0.4.1, the API client returns an error for 404
-		// rather than a nil result, so we must check this way.
-		if strings.Contains(err.Error(), "404") {
-			return false, nil
-		}
-
-		return true, fmt.Errorf("error checking for ACL token %q: %#v", accessor, err)
-	}
-
-	return true, nil
 }

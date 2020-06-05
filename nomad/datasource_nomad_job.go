@@ -1,17 +1,18 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"strings"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceJob() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceJobRead,
+		ReadContext: dataSourceJobRead,
 		Schema: map[string]*schema.Schema{
 
 			"job_id": {
@@ -112,7 +113,7 @@ func dataSourceJob() *schema.Resource {
 							Computed: true,
 						},
 						"constraints": {
-							Type:     schema.TypeMap,
+							Type:     schema.TypeList,
 							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -140,7 +141,7 @@ func dataSourceJob() *schema.Resource {
 						//		}
 						//},
 						"restart_policy": {
-							Type:     schema.TypeMap,
+							Type:     schema.TypeSet,
 							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -164,7 +165,7 @@ func dataSourceJob() *schema.Resource {
 							},
 						},
 						"reschedule_policy": {
-							Type:     schema.TypeMap,
+							Type:     schema.TypeList,
 							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -196,7 +197,7 @@ func dataSourceJob() *schema.Resource {
 							},
 						},
 						"ephemeral_disk": {
-							Type:     schema.TypeMap,
+							Type:     schema.TypeList,
 							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -217,7 +218,7 @@ func dataSourceJob() *schema.Resource {
 						},
 						"update_strategy": {
 							Computed: true,
-							Type:     schema.TypeMap,
+							Type:     schema.TypeList,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"stagger": {
@@ -252,7 +253,7 @@ func dataSourceJob() *schema.Resource {
 							},
 						},
 						"migrate_strategy": {
-							Type:     schema.TypeMap,
+							Type:     schema.TypeList,
 							Computed: true,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
@@ -379,7 +380,7 @@ func dataSourceJob() *schema.Resource {
 	}
 }
 
-func dataSourceJobRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -396,10 +397,10 @@ func dataSourceJobRead(d *schema.ResourceData, meta interface{}) error {
 		// As of Nomad 0.4.1, the API client returns an error for 404
 		// rather than a nil result, so we must check this way.
 		if strings.Contains(err.Error(), "404") {
-			return err
+			return diag.FromErr(err)
 		}
 
-		return fmt.Errorf("error checking for job: %#v", err)
+		return diag.Errorf("error checking for job: %s", err.Error())
 	}
 
 	d.SetId(*job.ID)

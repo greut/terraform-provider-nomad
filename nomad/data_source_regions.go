@@ -1,15 +1,16 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceRegions() *schema.Resource {
 	return &schema.Resource{
-		Read: regionsDataSourceRead,
+		ReadContext: regionsDataSourceRead,
 
 		Schema: map[string]*schema.Schema{
 			"regions": {
@@ -21,16 +22,20 @@ func dataSourceRegions() *schema.Resource {
 	}
 }
 
-func regionsDataSourceRead(d *schema.ResourceData, meta interface{}) error {
+func regionsDataSourceRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 
 	log.Printf("[DEBUG] Reading regions from Nomad")
-	resp, err := client.Regions().List()
+	regions, err := client.Regions().List()
 	if err != nil {
-		return fmt.Errorf("error reading regions from Nomad: %s", err)
+		return diag.Errorf("error reading regions from Nomad: %s", err.Error())
 	}
-	log.Printf("[DEBUG] Read regions from Nomad")
+	log.Printf("[DEBUG] Read %d regions from Nomad", len(regions))
 	d.SetId(client.Address() + "/regions")
 
-	return d.Set("regions", resp)
+	if err := d.Set("regions", regions); err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }

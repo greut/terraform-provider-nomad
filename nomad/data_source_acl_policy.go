@@ -1,16 +1,18 @@
 package nomad
 
 import (
-	"fmt"
-	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"context"
 	"log"
 	"strings"
+
+	"github.com/hashicorp/nomad/api"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceAclPolicy() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceAclPolicyRead,
+		ReadContext: dataSourceAclPolicyRead,
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Description: "Name",
@@ -31,7 +33,7 @@ func dataSourceAclPolicy() *schema.Resource {
 	}
 }
 
-func dataSourceAclPolicyRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceAclPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -47,7 +49,7 @@ func dataSourceAclPolicyRead(d *schema.ResourceData, meta interface{}) error {
 			return nil
 		}
 
-		return fmt.Errorf("error getting ACL policy: %#v", err)
+		return diag.Errorf("error getting ACL policy: %#v", err)
 	}
 
 	d.SetId(policy.Name)

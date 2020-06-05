@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,18 +12,19 @@ import (
 	"time"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/terraform-providers/terraform-provider-nomad/nomad/core/jobspec"
 )
 
 func resourceJob() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceJobRegister,
-		Update: resourceJobRegister,
-		Delete: resourceJobDeregister,
-		Read:   resourceJobRead,
+		CreateContext: resourceJobRegister,
+		UpdateContext: resourceJobRegister,
+		DeleteContext: resourceJobDeregister,
+		ReadContext:   resourceJobRead,
 
 		CustomizeDiff: resourceJobCustomizeDiff,
 
@@ -156,6 +158,7 @@ func resourceJob() *schema.Resource {
 									"meta": {
 										Computed: true,
 										Type:     schema.TypeMap,
+										Elem:     schema.TypeString,
 									},
 									"volume_mounts": {
 										Computed: true,
@@ -207,6 +210,7 @@ func resourceJob() *schema.Resource {
 						"meta": {
 							Computed: true,
 							Type:     schema.TypeMap,
+							Elem:     schema.TypeString,
 						},
 					},
 				},
@@ -222,7 +226,7 @@ const (
 	DeploymentSuccessful = "deployment_successful"
 )
 
-func resourceJobRegister(d *schema.ResourceData, meta interface{}) error {
+func resourceJobRegister(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	timeout := d.Timeout(schema.TimeoutCreate)
 	if !d.IsNewResource() {
 		timeout = d.Timeout(schema.TimeoutUpdate)
@@ -236,7 +240,7 @@ func resourceJobRegister(d *schema.ResourceData, meta interface{}) error {
 	is_json := d.Get("json").(bool)
 	job, err := parseJobspec(jobspecRaw, is_json, providerConfig.vaultToken)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	if job.Namespace == nil || *job.Namespace == "" {
@@ -256,7 +260,7 @@ func resourceJobRegister(d *schema.ResourceData, meta interface{}) error {
 		ModifyIndex:    wantModifyIndex,
 	}, nil)
 	if err != nil {
-		return fmt.Errorf("error applying jobspec: %s", err)
+		return diag.Errorf("error applying jobspec: %s", err)
 	}
 
 	log.Printf("[DEBUG] job '%s' registered in namespace '%s'", *job.ID, *job.Namespace)
@@ -269,7 +273,7 @@ func resourceJobRegister(d *schema.ResourceData, meta interface{}) error {
 		log.Printf("[DEBUG] will monitor scheduling/deployment of job '%s'", *job.ID)
 		deployment, err := monitorDeployment(client, timeout, resp.EvalID)
 		if err != nil {
-			return fmt.Errorf(
+			return diag.Errorf(
 				"error waiting for job '%s' to schedule/deploy successfully: %s",
 				*job.ID, err)
 		}
@@ -282,7 +286,7 @@ func resourceJobRegister(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	return resourceJobRead(d, meta) // populate other computed attributes
+	return resourceJobRead(ctx, d, meta) // populate other computed attributes
 }
 
 // monitorDeployment monitors the evalution(s) from a job create/update and,
@@ -391,7 +395,7 @@ func deploymentStateRefreshFunc(client *api.Client, deploymentID string) resourc
 	}
 }
 
-func resourceJobDeregister(d *schema.ResourceData, meta interface{}) error {
+func resourceJobDeregister(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -415,13 +419,13 @@ func resourceJobDeregister(d *schema.ResourceData, meta interface{}) error {
 	}
 	_, _, err := client.Jobs().Deregister(id, false, opts)
 	if err != nil {
-		return fmt.Errorf("error deregistering job: %s", err)
+		return diag.Errorf("error deregistering job: %s", err)
 	}
 
 	return nil
 }
 
-func resourceJobRead(d *schema.ResourceData, meta interface{}) error {
+func resourceJobRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -443,7 +447,7 @@ func resourceJobRead(d *schema.ResourceData, meta interface{}) error {
 			return nil
 		}
 
-		return fmt.Errorf("error checking for job: %s", err)
+		return diag.Errorf("error checking for job: %s", err)
 	}
 	log.Printf("[DEBUG] found job %q in namespace %q", *job.Name, *job.Namespace)
 
@@ -472,7 +476,7 @@ func resourceJobRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceJobCustomizeDiff(d *schema.ResourceDiff, meta interface{}) error {
+func resourceJobCustomizeDiff(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
 	log.Printf("[DEBUG] resourceJobCustomizeDiff")
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client

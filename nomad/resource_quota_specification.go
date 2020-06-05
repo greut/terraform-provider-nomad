@@ -1,24 +1,24 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceQuotaSpecification() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceQuotaSpecificationWrite,
-		Update: resourceQuotaSpecificationWrite,
-		Delete: resourceQuotaSpecificationDelete,
-		Read:   resourceQuotaSpecificationRead,
-		Exists: resourceQuotaSpecificationExists,
+		CreateContext: resourceQuotaSpecificationWrite,
+		UpdateContext: resourceQuotaSpecificationWrite,
+		DeleteContext: resourceQuotaSpecificationDelete,
+		ReadContext:   resourceQuotaSpecificationRead,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -79,7 +79,7 @@ func resourceQuotaSpecificationRegionLimits() *schema.Resource {
 	}
 }
 
-func resourceQuotaSpecificationWrite(d *schema.ResourceData, meta interface{}) error {
+func resourceQuotaSpecificationWrite(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 
 	spec := api.QuotaSpec{
@@ -88,22 +88,22 @@ func resourceQuotaSpecificationWrite(d *schema.ResourceData, meta interface{}) e
 	}
 	limits, err := expandQuotaLimits(d)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 	spec.Limits = limits
 
 	log.Printf("[DEBUG] Upserting quota specification %q", spec.Name)
 	_, err = client.Quotas().Register(&spec, nil)
 	if err != nil {
-		return fmt.Errorf("error upserting quota specification %q: %s", spec.Name, err.Error())
+		return diag.Errorf("error upserting quota specification %q: %s", spec.Name, err)
 	}
 	log.Printf("[DEBUG] Upserted quota specification %q", spec.Name)
 	d.SetId(spec.Name)
 
-	return resourceQuotaSpecificationRead(d, meta)
+	return resourceQuotaSpecificationRead(ctx, d, meta)
 }
 
-func resourceQuotaSpecificationDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceQuotaSpecificationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
@@ -111,14 +111,14 @@ func resourceQuotaSpecificationDelete(d *schema.ResourceData, meta interface{}) 
 	log.Printf("[DEBUG] Deleting quota specification %q", name)
 	_, err := client.Quotas().Delete(name, nil)
 	if err != nil {
-		return fmt.Errorf("error deleting quota specification %q: %s", name, err.Error())
+		return diag.Errorf("error deleting quota specification %q: %s", name, err)
 	}
 	log.Printf("[DEBUG] Deleted quota specification %q", name)
 
 	return nil
 }
 
-func resourceQuotaSpecificationRead(d *schema.ResourceData, meta interface{}) error {
+func resourceQuotaSpecificationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
@@ -127,7 +127,7 @@ func resourceQuotaSpecificationRead(d *schema.ResourceData, meta interface{}) er
 	spec, _, err := client.Quotas().Info(name, nil)
 	if err != nil {
 		// we have Exists, so no need to handle 404
-		return fmt.Errorf("error reading quota specification %q: %s", name, err.Error())
+		return diag.Errorf("error reading quota specification %q: %s", name, err)
 	}
 	log.Printf("[DEBUG] Read quota specification %q", name)
 
@@ -135,34 +135,10 @@ func resourceQuotaSpecificationRead(d *schema.ResourceData, meta interface{}) er
 	d.Set("description", spec.Description)
 	err = d.Set("limits", flattenQuotaLimits(spec.Limits))
 	if err != nil {
-		return fmt.Errorf("error setting quota specification limits for %q: %s", name, err.Error())
+		return diag.Errorf("error setting quota specification limits for %q: %s", name, err)
 	}
 
 	return nil
-}
-
-func resourceQuotaSpecificationExists(d *schema.ResourceData, meta interface{}) (bool, error) {
-	client := meta.(ProviderConfig).client
-
-	name := d.Id()
-	log.Printf("[DEBUG] Checking if quota specification %q exists", name)
-	resp, _, err := client.Quotas().Info(name, nil)
-	if err != nil {
-		// As of Nomad 0.4.1, the API client returns an error for 404
-		// rather than a nil result, so we must check this way.
-		if strings.Contains(err.Error(), "404") {
-			return false, nil
-		}
-
-		return true, fmt.Errorf("error checking for quota specification %q: %#v", name, err)
-	}
-	// just to be safe
-	if resp == nil {
-		log.Printf("[DEBUG] Response was nil, so assuming quota specification %q doesn't exist", name)
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func flattenQuotaLimits(limits []*api.QuotaLimit) *schema.Set {

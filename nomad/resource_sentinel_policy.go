@@ -1,25 +1,25 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"strings"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceSentinelPolicy() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceSentinelPolicyWrite,
-		Update: resourceSentinelPolicyWrite,
-		Delete: resourceSentinelPolicyDelete,
-		Read:   resourceSentinelPolicyRead,
-		Exists: resourceSentinelPolicyExists,
+		CreateContext: resourceSentinelPolicyWrite,
+		UpdateContext: resourceSentinelPolicyWrite,
+		DeleteContext: resourceSentinelPolicyDelete,
+		ReadContext:   resourceSentinelPolicyRead,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -67,7 +67,7 @@ func resourceSentinelPolicy() *schema.Resource {
 	}
 }
 
-func resourceSentinelPolicyWrite(d *schema.ResourceData, meta interface{}) error {
+func resourceSentinelPolicyWrite(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 
 	policy := api.SentinelPolicy{
@@ -81,29 +81,29 @@ func resourceSentinelPolicyWrite(d *schema.ResourceData, meta interface{}) error
 	log.Printf("[DEBUG] Creating Sentinel policy %q", policy.Name)
 	_, err := client.SentinelPolicies().Upsert(&policy, nil)
 	if err != nil {
-		return fmt.Errorf("error upserting Sentinel policy %q: %s", policy.Name, err.Error())
+		return diag.Errorf("error upserting Sentinel policy %q: %s", policy.Name, err)
 	}
 	log.Printf("[DEBUG] Upserted Sentinel policy %q", policy.Name)
 	d.SetId(policy.Name)
 
-	return resourceSentinelPolicyRead(d, meta)
+	return resourceSentinelPolicyRead(ctx, d, meta)
 }
 
-func resourceSentinelPolicyDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceSentinelPolicyDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
 	log.Printf("[DEBUG] Deleting Sentinel policy %q", name)
 	_, err := client.SentinelPolicies().Delete(name, nil)
 	if err != nil {
-		return fmt.Errorf("error deleting Sentinel policy %q: %s", name, err.Error())
+		return diag.Errorf("error deleting Sentinel policy %q: %s", name, err)
 	}
 	log.Printf("[DEBUG] Deleted Sentinel policy %q", name)
 
 	return nil
 }
 
-func resourceSentinelPolicyRead(d *schema.ResourceData, meta interface{}) error {
+func resourceSentinelPolicyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(ProviderConfig).client
 	name := d.Id()
 
@@ -111,7 +111,7 @@ func resourceSentinelPolicyRead(d *schema.ResourceData, meta interface{}) error 
 	policy, _, err := client.SentinelPolicies().Info(name, nil)
 	if err != nil {
 		// we have Exists, so no need to handle 404
-		return fmt.Errorf("error reading Sentinel policy %q: %s", name, err.Error())
+		return diag.Errorf("error reading Sentinel policy %q: %s", name, err)
 	}
 	log.Printf("[DEBUG] Read Sentinel policy %q", name)
 
@@ -122,28 +122,4 @@ func resourceSentinelPolicyRead(d *schema.ResourceData, meta interface{}) error 
 	d.Set("policy", policy.Policy)
 
 	return nil
-}
-
-func resourceSentinelPolicyExists(d *schema.ResourceData, meta interface{}) (bool, error) {
-	client := meta.(ProviderConfig).client
-
-	name := d.Id()
-	log.Printf("[DEBUG] Checking if Sentinel policy %q exists", name)
-	resp, _, err := client.SentinelPolicies().Info(name, nil)
-	if err != nil {
-		// As of Nomad 0.4.1, the API client returns an error for 404
-		// rather than a nil result, so we must check this way.
-		if strings.Contains(err.Error(), "404") {
-			return false, nil
-		}
-
-		return true, fmt.Errorf("error checking for Sentinel policy %q: %#v", name, err)
-	}
-	// just to be safe
-	if resp == nil {
-		log.Printf("[DEBUG] Resp is nil, assuming Sentinel policy %q doesn't exist", name)
-		return false, nil
-	}
-
-	return true, nil
 }

@@ -1,16 +1,17 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceACLToken() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceACLTokenRead,
+		ReadContext: dataSourceACLTokenRead,
 		Schema: map[string]*schema.Schema{
 			"accessor_id": {
 				Description: "Non-sensitive identifier for this token.",
@@ -59,7 +60,7 @@ func dataSourceACLToken() *schema.Resource {
 	}
 }
 
-func dataSourceACLTokenRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceACLTokenRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 	accessor := d.Get("accessor_id").(string)
@@ -76,7 +77,7 @@ func dataSourceACLTokenRead(d *schema.ResourceData, meta interface{}) error {
 			return nil
 		}
 
-		return fmt.Errorf("error reading ACL token %q: %s", accessor, err.Error())
+		return diag.Errorf("error reading ACL token %q: %s", accessor, err.Error())
 	}
 	log.Printf("[DEBUG] Read ACL token %q", accessor)
 

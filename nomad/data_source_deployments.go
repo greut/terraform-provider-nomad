@@ -1,17 +1,18 @@
 package nomad
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceDeployments() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceDeploymentsRead,
+		ReadContext: dataSourceDeploymentsRead,
 		Schema: map[string]*schema.Schema{
 
 			"deployments": {
@@ -24,7 +25,7 @@ func dataSourceDeployments() *schema.Resource {
 	}
 }
 
-func dataSourceDeploymentsRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceDeploymentsRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	providerConfig := meta.(ProviderConfig)
 	client := providerConfig.client
 
@@ -34,10 +35,10 @@ func dataSourceDeploymentsRead(d *schema.ResourceData, meta interface{}) error {
 		// As of Nomad 0.4.1, the API client returns an error for 404
 		// rather than a nil result, so we must check this way.
 		if strings.Contains(err.Error(), "404") {
-			return err
+			return diag.FromErr(err)
 		}
 
-		return fmt.Errorf("error checking for deployments: %#v", err)
+		return diag.Errorf("error checking for deployments: %#v", err)
 	}
 
 	var deployments []map[string]interface{}
@@ -54,5 +55,9 @@ func dataSourceDeploymentsRead(d *schema.ResourceData, meta interface{}) error {
 
 	d.SetId(client.Address() + "/deployments")
 
-	return d.Set("deployments", deployments)
+	if err := d.Set("deployments", deployments); err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
