@@ -215,6 +215,12 @@ func resourceJob() *schema.Resource {
 					},
 				},
 			},
+
+			"purge_on_destroy": {
+				Description: "Whether to purge the job when the resource is destroyed.",
+				Optional:    true,
+				Type:        schema.TypeBool,
+			},
 		},
 	}
 }
@@ -400,7 +406,6 @@ func resourceJobDeregister(ctx context.Context, d *schema.ResourceData, meta int
 	client := providerConfig.client
 
 	// If deregistration is disabled, then do nothing
-
 	deregister_on_destroy := d.Get("deregister_on_destroy").(bool)
 	if !deregister_on_destroy {
 		log.Printf(
@@ -417,7 +422,8 @@ func resourceJobDeregister(ctx context.Context, d *schema.ResourceData, meta int
 	if opts.Namespace == "" {
 		opts.Namespace = "default"
 	}
-	_, _, err := client.Jobs().Deregister(id, false, opts)
+	purge := d.Get("purge_on_destroy").(bool)
+	_, _, err := client.Jobs().Deregister(id, purge, opts)
 	if err != nil {
 		return diag.Errorf("error deregistering job: %s", err)
 	}

@@ -66,10 +66,15 @@ func Provider() *schema.Provider {
 		DataSourcesMap: map[string]*schema.Resource{
 			"nomad_acl_policy":  dataSourceAclPolicy(),
 			"nomad_acl_token":   dataSourceACLToken(),
+			"nomad_acl_tokens":  dataSourceACLTokens(),
 			"nomad_deployments": dataSourceDeployments(),
 			"nomad_job":         dataSourceJob(),
+			"nomad_namespace":   dataSourceNamespace(),
 			"nomad_namespaces":  dataSourceNamespaces(),
+			"nomad_plugin":      dataSourcePlugin(),
+			"nomad_plugins":     dataSourcePlugins(),
 			"nomad_regions":     dataSourceRegions(),
+			"nomad_volumes":     dataSourceVolumes(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -79,6 +84,7 @@ func Provider() *schema.Provider {
 			"nomad_namespace":           resourceNamespace(),
 			"nomad_quota_specification": resourceQuotaSpecification(),
 			"nomad_sentinel_policy":     resourceSentinelPolicy(),
+			"nomad_volume":              resourceVolume(),
 		},
 	}
 }

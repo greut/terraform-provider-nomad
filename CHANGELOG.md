@@ -1,7 +1,24 @@
-## 1.4.8 (Unreleased)
+## 1.4.9 (Unreleased)
+
+IMPROVEMENTS: 
+* resource/nomad_job: added `purge_on_destroy` option ([#127](https://github.com/terraform-providers/terraform-provider-nomad/issues/127)][[#130](https://github.com/terraform-providers/terraform-provider-nomad/issues/130))
+* data source/nomad_namespace: added new data source to fetch info a Nomad namespace ([#126](https://github.com/terraform-providers/terraform-provider-nomad/issues/126))
+* data source/nomad_acl_tokens: added new data source to fetch Nomad ACL tokens ([#128](https://github.com/terraform-providers/terraform-provider-nomad/issues/128))
+
+
+## 1.4.8 (July 09, 2020)
+
+* **Target Nomad 0.12.0**: updated the nomad client to support Nomad API version 0.12.0 ([#121](https://github.com/terraform-providers/terraform-provider-nomad/issues/121))
+
+IMPROVEMENTS: 
+* data source/nomad_plugin: for fetching information on a single CSI plugin ([#123](https://github.com/terraform-providers/terraform-provider-nomad/issues/123))
+* data source/nomad_plugins: for fetching the list of available CSI plugins ([#123](https://github.com/terraform-providers/terraform-provider-nomad/issues/123))
+* data source/nomad_volumes: for fetching the list of available CSI volumes ([#123](https://github.com/terraform-providers/terraform-provider-nomad/issues/123))
+* resource/nomad_volume: for registering a CSI volume ([#213](https://github.com/terraform-providers/terraform-provider-nomad/issues/213))
+
 ## 1.4.7 (June 12, 2020)
 
-* **Target Nomad 0.11.2**: updated the nomad client to support Nomad API version 0.11.2 ([#113](https://github.com/terraform-providers/terraform-provider-nomad/issues/113))
+* **Target Nomad 0.11.3**: updated the nomad client to support Nomad API version 0.11.3 ([#113](https://github.com/terraform-providers/terraform-provider-nomad/issues/113))
 
 IMPROVEMENTS:
 * resource/nomad_job: allow JSON input to have the same format as produced by the `nomad` CLI ([#111](https://github.com/terraform-providers/terraform-provider-nomad/pull/111))
